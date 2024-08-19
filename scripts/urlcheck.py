@@ -15,20 +15,29 @@ INTERNAL_404_URL = os.environ.get('INTERNAL_404_URL')
 def check_url_status(url):
     """Performs a progressive set of checks on the URL."""
     try:
-        # Quick check: HEAD request
-        response = requests.head(url, allow_redirects=True, timeout=5)
-        if response.status_code in IGNORED_STATUS_CODES or response.url == INTERNAL_404_URL:
-            return response.status_code, response.reason, response.url
+        # First check: HEAD request
+        response = requests.head(url, allow_redirects=False, timeout=5)
         
-        # Handle common misresponses with GET request
-        if response.status_code == 404 or response.status_code == 405 or response.status_code >= 400:
+        # Handle redirects (3xx status codes)
+        if 300 <= response.status_code < 400:
+            redirect_url = response.headers.get('Location')
+            if redirect_url:
+                print(f"Redirected to: {redirect_url}")
+                # Follow the redirect
+                return check_url_status(redirect_url)
+
+        # If HEAD request returns problematic code, follow up with GET
+        if response.status_code in {404, 405} or response.status_code >= 400:
             return perform_detailed_check(url)
+        elif response.status_code in IGNORED_STATUS_CODES or response.url == INTERNAL_404_URL:
+            return response.status_code, response.reason, response.url
         else:
             return response.status_code, response.reason, response.url
+    
     except requests.RequestException:
         pass
     
-    # Full check: GET request
+    # Fallback: Perform full GET request if HEAD fails
     return perform_detailed_check(url)
 
 def perform_detailed_check(url):
