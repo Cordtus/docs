@@ -18,9 +18,12 @@ def check_url_status(url):
         response = requests.head(url, allow_redirects=True, timeout=5)
         if response.status_code in IGNORED_STATUS_CODES:
             return response.status_code, response.reason, response.url
-        if response.status_code == 404:
-            # Proceed to more thorough checks if 404 is encountered
+        
+        # Handle common misresponses with GET request
+        if response.status_code == 404 or response.status_code == 405 or response.status_code >= 400:
             return perform_detailed_check(url)
+        else:
+            return response.status_code, response.reason, response.url
     except requests.RequestException:
         pass
     
@@ -36,6 +39,7 @@ def perform_detailed_check(url):
         return response.status_code, response.reason, response.url
     except requests.RequestException as e:
         return None, str(e), None
+
 
 def find_urls(text):
     """Finds valid URLs, ensuring proper markdown syntax."""
