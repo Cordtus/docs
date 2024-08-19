@@ -3,7 +3,7 @@ import re
 import json
 import sys
 import requests
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Load configuration from environment variables
@@ -14,14 +14,19 @@ INTERNAL_404_URL = os.environ.get('INTERNAL_404_URL')
 
 def check_url_status(url):
     """Performs a progressive set of checks on the URL."""
+    print(f"Checking URL: {url}")  # Logging the URL being checked
     try:
-        # First check: HEAD request
+        # Quick check: HEAD request
         response = requests.head(url, allow_redirects=False, timeout=5)
-        
+        print(f"HEAD request: {response.status_code} {response.reason}, URL: {response.url}")  # Log response
+
         # Handle redirects (3xx status codes)
         if 300 <= response.status_code < 400:
             redirect_url = response.headers.get('Location')
             if redirect_url:
+                # Handle relative redirects
+                if not urlparse(redirect_url).netloc:
+                    redirect_url = urljoin(url, redirect_url)
                 print(f"Redirected to: {redirect_url}")
                 # Follow the redirect
                 return check_url_status(redirect_url)
@@ -34,20 +39,23 @@ def check_url_status(url):
         else:
             return response.status_code, response.reason, response.url
     
-    except requests.RequestException:
-        pass
+    except requests.RequestException as e:
+        print(f"RequestException: {str(e)}")  # Log exceptions
     
     # Fallback: Perform full GET request if HEAD fails
     return perform_detailed_check(url)
 
 def perform_detailed_check(url):
     """Performs a more thorough check with GET if HEAD fails."""
+    print(f"Performing GET request for URL: {url}")  # Logging the GET request
     try:
         response = requests.get(url, allow_redirects=True, timeout=10)
+        print(f"GET request: {response.status_code} {response.reason}, URL: {response.url}")  # Log response
         if response.status_code in IGNORED_STATUS_CODES or response.url == INTERNAL_404_URL:
             return response.status_code, response.reason, response.url
         return response.status_code, response.reason, response.url
     except requests.RequestException as e:
+        print(f"RequestException in GET: {str(e)}")  # Log exceptions
         return None, str(e), None
 
 def find_urls(text):
