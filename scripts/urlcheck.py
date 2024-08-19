@@ -38,12 +38,10 @@ def perform_detailed_check(url):
         return None, str(e), None
 
 def find_urls(text):
-    """Finds valid URLs, avoiding Markdown embedded URLs."""
-    url_pattern = re.compile(r'https?://[^\s"\'<>\)]*')
-    urls = url_pattern.findall(text)
-    # Filter out Markdown embedded URLs
-    filtered_urls = [url for url in urls if not url.startswith('[')]
-    return filtered_urls
+    """Finds valid URLs, ensuring proper markdown syntax."""
+    # Improved regex pattern to avoid catching markdown syntax errors
+    url_pattern = re.compile(r'\((https?://[^\s"\'<>\)]+)\)')
+    return url_pattern.findall(text)
 
 def is_valid_url(url):
     """Checks if a URL is valid."""
