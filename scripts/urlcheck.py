@@ -6,19 +6,20 @@ import requests
 from urllib.parse import urlparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-INTERNAL_404_URL = "https://docs.osmosis.zone/404.html"
-MAX_WORKERS = 5
-
-IGNORED_STATUS_CODES = {200, 403, 405, 415, 501}
+# Configs are set by env variables in workflow file
+INTERNAL_404_URL = os.environ.get('INTERNAL_404_URL', 'https://docs.osmosis.zone/404.html')
+MAX_WORKERS = int(os.environ.get('MAX_WORKERS', 5))
+IGNORED_STATUS_CODES = set(map(int, os.environ.get('IGNORED_STATUS_CODES', '200,403,405,415,501').split(',')))
+FILE_EXTENSIONS = os.environ.get('FILE_EXTENSIONS', '.md,.mdx').split(',')
 
 def check_url_status(url):
     """Performs a progressive set of checks on the URL."""
     try:
-        # Stage 1: Quick HEAD request
+        # Quick check: HEAD request
         response = requests.head(url, allow_redirects=True, timeout=5)
         if response.status_code in IGNORED_STATUS_CODES:
             return response.status_code, response.reason, response.url
-        
+
         # Handle common misresponses with GET request
         if response.status_code == 404 or response.status_code == 405 or response.status_code >= 400:
             return perform_detailed_check(url)
@@ -26,8 +27,8 @@ def check_url_status(url):
             return response.status_code, response.reason, response.url
     except requests.RequestException:
         pass
-    
-    # Stage 2: Fallback to GET request
+
+    # Full check: GET request
     return perform_detailed_check(url)
 
 def perform_detailed_check(url):
@@ -79,7 +80,7 @@ def process_file(file_path):
     return file_report
 
 def check_location(location):
-    """Recursively checks all .md and .mdx files in the specified location."""
+    """Recursively checks all files with specified extensions in the given location."""
     all_reports = []
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         future_to_file = {}
@@ -89,7 +90,7 @@ def check_location(location):
         else:
             for root, _, files in os.walk(location):
                 for file in files:
-                    if file.endswith(('.md', '.mdx')):
+                    if any(file.endswith(ext) for ext in FILE_EXTENSIONS):
                         file_path = os.path.join(root, file)
                         future = executor.submit(process_file, file_path)
                         future_to_file[future] = file_path
@@ -113,7 +114,8 @@ def generate_report(report):
     return json.dumps(output)
 
 if __name__ == "__main__":
-    check_path = os.environ.get('CHECK_PATH', './docs/')
+    # Check path should be specified in workflow file
+    check_path = os.environ['CHECK_PATH']
     print(f"Checking URLs in location: {check_path}", file=sys.stderr)
     report = check_location(check_path)
     output = generate_report(report)
