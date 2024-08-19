@@ -34,7 +34,7 @@ jobs:
           echo "$output" >> $GITHUB_OUTPUT
           echo 'EOF' >> $GITHUB_OUTPUT
         env:
-          CHECK_PATH: './pages/'
+          CHECK_PATH: './docs/'
 
       - name: Process results
         id: process_results
